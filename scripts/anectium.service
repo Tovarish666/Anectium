@@ -1,0 +1,18 @@
+[Unit]
+Description=Anectium Proxy Manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/anectium
+ExecStart=/usr/bin/python3 /anectium/anectium.py
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65536
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,79 +1,77 @@
-Anectium
- 
-Anectium - программный комплекс для централизованного управления децентрализованной сетевой инфраструктурой.
-Призван заменить ручное администрирование сетевых узлов через ssh | rdp | web api | vnc и т.п., перевести всё в WEB. Anectium облегчает ведение базы данных (конфигов); самостоятельно управляет 3proxy; облегчает управление конечными сетевыми точками (модемами, рострами, маршрутизаторами), проводит диагностику сетевых точек и выдает им статус, а так же пытается в автономном режиме (без участия человека) исправить возникшую проблему; дает средства автоматизированного управления конечными сетевыми точками (модемами, рострами, маршрутизаторами)
+# Anectium
 
+Система управления 4G прокси-фермами на Linux.
 
-Текущая стадия: сервис на одном ПК.
- 
- 
-────────────────────────────────────────
-Блоки Anectium:
-────────────────────────────────────────
- 
-1. Прокси ядро
-    - 3proxy.exe
-    - config.cfg
-    - 3proxy.py
-        · парсит config.json
-        · генерирует config.cfg по шаблону
-        · запуск / перезапуск 3proxy.exe
- 
- 
-2. Парсер конфига  (Web-Dashboard <--> local config <--> Google Sheet)
-    - база данных (БД) .json
-    - gtabparser.py     — парсер данных из Google Таблицы + внесение данных
-    - dashbord_DB.py    — внутренняя система редактирования БД в дашборде
-    - config.json       — вспомогательный файл для формирования конфига 3proxy
- 
- 
-3. ReConnect Service
-    - web_reconnect.py          — HTTP-сервер; приём запроса на реконнект по ссылке;
-                                  отдача результатов (new ip | old ip)
-!!! - reconnect_core.py         — центральный единый сервис обработки реконнектов;
-                                  исследование времени подключения модема к сети;
-                                  ведение скрытой БД реконнектов
-        · reconnect_e3372h.py
-        · reconnect_b525.py
-        · reconnect_android.py
- 
-    Кулдаун:
-        · если модем реконнектился менее 2 минут назад — новый запрос отменяется
- 
- 
-4. Cheker Service
-    - cheker.py
-        · жив ли модем
-        · какая на нём скорость
-        · статус  🟢 🟡 🔴
-        · запрос на внесение данных в Google Таблицу / SQL DB / Web Dashboard
-        · запрос в TG-диспетчер при проблемах
-    - tg_dispetcher.py  — мини TG-бот для отправки сообщений о проблемах с модемами
-    - wanip.py
-    - speedtest.py
- 
- 
-5. Web UI
-    - index_local.html
+## Структура
 
-    //Нужно продумать так же центр объединения управления конфигами (будет располагаться на vps или одном из моих личных серверов)
- 
- 
-6. Installer / Update  (GitHub)
-    - install os
-    - anectium-install-script
-    - anectium-uninstall-script
-    - anectium-update-script
-    - proxyveth-install-script
-    -
- 
-────────────────────────────────────────
-На карандаше:
-────────────────────────────────────────
-    - reconnect_e3372h: реконнект через перезагрузку модема, а не разрыв cell lock
-    - Профили реконнекта: ultra | fast | full  (объявлены, не реализованы)
-    - Поддержка B525, Android (reconnect_b525.py, reconnect_android.py)
-    - Центральный сервер + N агентов
-    - `
-    - держать в уме, что вероятно в будущем появится сервис для оплаты модемов
-    - держать в уме, что будет добавлена нейросетевая тех.поддержка
+```
+/anectium/
+├── 3proxy/                     # Прокси-ядро
+│   ├── 3proxy                  # бинарник (собирается из исходников)
+│   ├── config.cfg              # автогенерация (не редактировать)
+│   ├── users                   # автогенерация
+│   └── logs/
+│
+├── core/                       # Основная логика (Python)
+│   ├── proxy_engine.py         # генерация конфига 3proxy + управление
+│   ├── config_manager.py       # CRUD для db.json
+│   ├── reconnect_core.py       # диспетчер реконнектов (cooldown, circuit breaker)
+│   ├── reconnect_e3372h.py     # Huawei E3372H: cell lock (soft/full) + HTTP reboot
+│   ├── reconnect_b525.py       # Huawei B525 (TODO)
+│   ├── reconnect_android.py    # Android (TODO)
+│   ├── web_reconnect.py        # HTTP-сервер для реконнектов
+│   ├── checker.py              # мониторинг (ping + proxy check)
+│   └── tg_dispatcher.py        # Telegram-алерты
+│
+├── web/                        # Веб-дашборд (TODO)
+│
+├── data/
+│   ├── db.json                 # основная БД
+│   ├── deny_list_domain.txt    # домены операторов для блокировки
+│   ├── reconnect_log.json      # лог реконнектов
+│   └── backups/
+│
+├── scripts/
+│   ├── install.sh              # полная установка
+│   ├── install_3proxy.sh       # сборка 3proxy
+│   └── anectium.service        # systemd
+│
+├── anectium.py                 # точка входа
+└── requirements.txt
+```
+
+## Установка
+
+```bash
+# На чистый Debian/Ubuntu:
+curl -fsSL https://raw.githubusercontent.com/Tovarish666/Anectium/main/scripts/install.sh | bash
+
+# Или вручную:
+git clone https://github.com/Tovarish666/Anectium.git /anectium
+cd /anectium
+bash scripts/install.sh
+```
+
+## Запуск
+
+```bash
+cd /anectium && python3 anectium.py
+```
+
+## Systemd
+
+```bash
+cp /anectium/scripts/anectium.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now anectium
+```
+
+## Реконнект модема
+
+```
+GET http://SERVER:8800/reconnect?modem=mdm-001
+GET http://SERVER:8800/reconnect?modem=mdm-001&method=soft
+GET http://SERVER:8800/reconnect?modem=mdm-001&method=reboot
+```
+
+Методы: `soft` (быстрый cell lock), `full` (полный cell lock, по умолчанию), `reboot` (HTTP перезагрузка модема).
